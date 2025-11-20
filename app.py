@@ -41,34 +41,36 @@ import requests
 import yfinance as yf
 
 def download_close_prices(ticker: str, lookback: int):
-    end = datetime.utcnow().date()
-    start = end - timedelta(days=365 * 5)
-
-    # Patch yfinance headers globally
+    """
+    Download daily close prices for the last 5 years using yfinance.
+    Uses period-based download (more robust than start/end).
+    """
+    # Make sure yfinance uses a browser-like User-Agent
     yf.utils.default_user_agent = lambda: "Mozilla/5.0"
 
     try:
+        # Use period instead of start/end – this is much more stable
         df = yf.download(
             tickers=ticker,
-            start=start,
-            end=end,
-            progress=False,
+            period="5y",
+            interval="1d",
             auto_adjust=True,
-            threads=False
+            progress=False,
+            threads=False,
         )
     except Exception as e:
         raise ValueError(f"Yahoo Finance request failed: {e}")
 
     if df is None or df.empty:
-        raise ValueError(f"Yahoo Finance returned no data for ticker '{ticker}'. Try another ticker.")
+        raise ValueError(f"Yahoo Finance returned no data for ticker '{ticker}'. Try a different ticker or check symbol.")
 
     if "Close" not in df.columns:
-        raise ValueError(f"No 'Close' column found. Yahoo Finance response invalid for {ticker}.")
+        raise ValueError(f"No 'Close' column found in Yahoo Finance response for '{ticker}'.")
 
     close = df["Close"].dropna().values.reshape(-1, 1)
 
     if len(close) < lookback:
-        raise ValueError(f"Not enough data for {ticker}. Need at least {lookback} points.")
+        raise ValueError(f"Not enough data for {ticker}. Need at least {lookback} points, got {len(close)}.")
 
     return df.index, close
 
@@ -100,13 +102,12 @@ def predict(req: PredictRequest):
 
     future_prices = make_future_predictions(close, req.days)
     last_date = dates[-1]
-    future_dates = [last_date + timedelta(days=i) for i in range(1, req.days+1)]
+    future_dates = [last_date + timedelta(days=i) for i in range(1, req.days + 1)]
 
     return {
         "ticker": req.ticker.upper(),
         "predictions": [
             {"date": future_dates[i].strftime("%Y-%m-%d"), "price": float(future_prices[i])}
-            for i in range(len(future_prices))
-        ]
+            for i in range(req.days)
+        ],
     }
-

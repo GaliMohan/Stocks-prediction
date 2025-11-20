@@ -44,25 +44,26 @@ def download_close_prices(ticker: str, lookback: int):
     end = datetime.utcnow().date()
     start = end - timedelta(days=365 * 5)
 
-    # Force yfinance to use headers like a browser
-    headers = {
-        "User-Agent": "Mozilla/5.0",
-        "Accept": "application/json"
-    }
+    # Patch yfinance headers globally
+    yf.utils.default_user_agent = lambda: "Mozilla/5.0"
 
-    session = requests.Session()
-    session.headers.update(headers)
+    try:
+        df = yf.download(
+            tickers=ticker,
+            start=start,
+            end=end,
+            progress=False,
+            auto_adjust=True,
+            threads=False
+        )
+    except Exception as e:
+        raise ValueError(f"Yahoo Finance request failed: {e}")
 
-    df = yf.download(
-        ticker,
-        start=start,
-        end=end,
-        session=session,
-        progress=False,
-    )
+    if df is None or df.empty:
+        raise ValueError(f"Yahoo Finance returned no data for ticker '{ticker}'. Try another ticker.")
 
-    if df.empty or "Close" not in df.columns:
-        raise ValueError(f"Could not download data for {ticker}. Yahoo Finance blocked the request.")
+    if "Close" not in df.columns:
+        raise ValueError(f"No 'Close' column found. Yahoo Finance response invalid for {ticker}.")
 
     close = df["Close"].dropna().values.reshape(-1, 1)
 
@@ -70,7 +71,6 @@ def download_close_prices(ticker: str, lookback: int):
         raise ValueError(f"Not enough data for {ticker}. Need at least {lookback} points.")
 
     return df.index, close
-
 
 def make_future_predictions(close, days):
     scaled = scaler.transform(close)

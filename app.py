@@ -37,16 +37,40 @@ class PredictRequest(BaseModel):
     ticker: str
     days: int = 7
 
+import requests
+import yfinance as yf
+
 def download_close_prices(ticker: str, lookback: int):
     end = datetime.utcnow().date()
     start = end - timedelta(days=365 * 5)
-    df = yf.download(ticker, start=start, end=end)
+
+    # Force yfinance to use headers like a browser
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json"
+    }
+
+    session = requests.Session()
+    session.headers.update(headers)
+
+    df = yf.download(
+        ticker,
+        start=start,
+        end=end,
+        session=session,
+        progress=False,
+    )
+
     if df.empty or "Close" not in df.columns:
-        raise ValueError("Could not download data.")
+        raise ValueError(f"Could not download data for {ticker}. Yahoo Finance blocked the request.")
+
     close = df["Close"].dropna().values.reshape(-1, 1)
+
     if len(close) < lookback:
-        raise ValueError("Not enough data points.")
+        raise ValueError(f"Not enough data for {ticker}. Need at least {lookback} points.")
+
     return df.index, close
+
 
 def make_future_predictions(close, days):
     scaled = scaler.transform(close)

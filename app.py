@@ -43,13 +43,13 @@ import yfinance as yf
 def download_close_prices(ticker: str, lookback: int):
     """
     Download daily close prices for the last 5 years using yfinance.
-    Uses period-based download (more robust than start/end).
+    Uses period-based download to ensure maximum compatibility.
     """
-    # Make sure yfinance uses a browser-like User-Agent
+
+    # Force yfinance to use a browser-like user agent
     yf.utils.default_user_agent = lambda: "Mozilla/5.0"
 
     try:
-        # Use period instead of start/end – this is much more stable
         df = yf.download(
             tickers=ticker,
             period="5y",
@@ -62,15 +62,15 @@ def download_close_prices(ticker: str, lookback: int):
         raise ValueError(f"Yahoo Finance request failed: {e}")
 
     if df is None or df.empty:
-        raise ValueError(f"Yahoo Finance returned no data for ticker '{ticker}'. Try a different ticker or check symbol.")
+        raise ValueError(f"No data available for '{ticker}'. Try another symbol.")
 
     if "Close" not in df.columns:
-        raise ValueError(f"No 'Close' column found in Yahoo Finance response for '{ticker}'.")
+        raise ValueError(f"No 'Close' column returned for '{ticker}'.")
 
     close = df["Close"].dropna().values.reshape(-1, 1)
 
     if len(close) < lookback:
-        raise ValueError(f"Not enough data for {ticker}. Need at least {lookback} points, got {len(close)}.")
+        raise ValueError(f"Not enough data for '{ticker}'. Needed {lookback}, got {len(close)}.")
 
     return df.index, close
 
